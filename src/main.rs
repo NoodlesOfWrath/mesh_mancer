@@ -45,9 +45,8 @@ fn main() {
             let mut model = info.0;
             let vector3 = info.1;
 
-            for vertex in model.vertices.iter_mut() {
-                *vertex += vector3;
-            }
+            let transform = Matrix4::from_translation(vector3);
+            model.set_transform(transform);
 
             model
         },
@@ -92,23 +91,11 @@ fn main() {
     });
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test() {
-        let node = Node {
-            operation: |x: i32| x + 1,
-        };
-        assert_eq!((node.operation)(1), 2);
-    }
-}
-
 struct Model {
     vertices: Vec<Vector3<f32>>,
     indices: Vec<u32>,
     normals: Vec<Vector3<f32>>,
+    transform: Matrix4<f32>,
     normals_calculated: bool,
 }
 
@@ -118,6 +105,7 @@ impl Model {
             vertices: Vec::new(),
             indices: Vec::new(),
             normals: Vec::new(),
+            transform: Matrix4::identity(),
             normals_calculated: false,
         }
     }
@@ -151,7 +139,7 @@ impl Model {
             },
         );
 
-        let gm = Gm::new(
+        let mut gm = Gm::new(
             mesh,
             PhysicalMaterial::new_opaque(
                 context,
@@ -161,6 +149,8 @@ impl Model {
                 },
             ),
         );
+
+        gm.set_transformation(self.transform);
 
         gm
     }
@@ -180,5 +170,22 @@ impl Model {
         }
         self.normals = normals;
         self.normals_calculated = true;
+    }
+
+    fn set_transform(&mut self, transform: Matrix4<f32>) {
+        self.transform = transform;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test() {
+        let node = Node {
+            operation: |x: i32| x + 1,
+        };
+        assert_eq!((node.operation)(1), 2);
     }
 }
