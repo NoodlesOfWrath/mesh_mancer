@@ -1,8 +1,8 @@
-use std::any::TypeId;
+use std::any::{Any, TypeId};
 
 pub trait Input {
     type T;
-    fn convert(&self) -> Self::T;
+    fn convert(items: Vec<&dyn Any>) -> Self::T;
     fn needed_types() -> Vec<TypeId>;
 }
 
@@ -12,8 +12,9 @@ macro_rules! impl_input {
     ($($t:ident),*) => {
         impl<$($t: Clone + 'static),*> Input for ($($t,)*) {
             type T = ($($t,)*);
-            fn convert(&self) -> Self::T {
-                self.clone()
+            fn convert(items: Vec<&dyn Any>) -> Self::T {
+                let mut items = items.into_iter();
+                ($($t::clone(items.next().unwrap().downcast_ref::<$t>().unwrap()),)*)
             }
             fn needed_types() -> Vec<TypeId> {
                 // if T is (), then we don't need any types
