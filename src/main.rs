@@ -1,56 +1,12 @@
-use three_d::Mesh;
-
-struct Node<I, O> {
-    operation: fn(I) -> O,
-}
-
-impl<I, O> Node<I, O> {
-    fn operation(&self, input: I) -> O {
-        (self.operation)(input)
-    }
-}
-
 use three_d::*;
+mod nodes;
+use nodes::*;
+pub mod macros;
+
 fn main() {
-    let sphere_node = Node {
-        operation: |()| -> Model {
-            let mut model = Model::new();
-            let sphere = CpuMesh::sphere(32);
-            for vertex in sphere.positions.into_f32().iter() {
-                model.add_vertex(vertex.x, vertex.y, vertex.z);
-            }
-            let mut a = None;
-            let mut b = None;
-            let mut c = None;
-            let indices = sphere.indices.into_u32().expect("Indices are not u32");
-            for index in indices.iter() {
-                if a.is_none() {
-                    a = Some(*index);
-                } else if b.is_none() {
-                    b = Some(*index);
-                } else if c.is_none() {
-                    c = Some(*index);
-                    model.add_index(a.unwrap(), b.unwrap(), c.unwrap());
-                    a = None;
-                    b = None;
-                    c = None;
-                }
-            }
-            model
-        },
-    };
+    let sphere_node = SphereNode {};
 
-    let translate_node = Node {
-        operation: |info: (Model, Vector3<f32>)| -> Model {
-            let mut model = info.0;
-            let vector3 = info.1;
-
-            let transform = Matrix4::from_translation(vector3);
-            model.set_transform(transform);
-
-            model
-        },
-    };
+    let transform_node = TransformNode {};
 
     let window = Window::new(WindowSettings {
         title: "Shapes!".to_string(),
@@ -60,8 +16,8 @@ fn main() {
     .unwrap();
 
     let context = window.gl();
-    let mesh = translate_node
-        .operation((sphere_node.operation(()), Vector3::new(0.0, 0.0, 0.0)))
+    let mesh = transform_node
+        .operation((sphere_node.operation(((),)), Vector3::new(0.0, 0.0, 0.0)))
         .into_gm(&context);
 
     let mut camera = Camera::new_perspective(
@@ -91,7 +47,8 @@ fn main() {
     });
 }
 
-struct Model {
+#[derive(Clone)]
+pub struct Model {
     vertices: Vec<Vector3<f32>>,
     indices: Vec<u32>,
     normals: Vec<Vector3<f32>>,
@@ -180,12 +137,16 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
+    struct PlusOneNode {}
+    impl Node<(i32,), i32> for PlusOneNode {
+        fn operation(&self, input: (i32,)) -> i32 {
+            input.0 + 1
+        }
+    }
 
     #[test]
     fn test() {
-        let node = Node {
-            operation: |x: i32| x + 1,
-        };
-        assert_eq!((node.operation)(1), 2);
+        let node = PlusOneNode {};
+        assert_eq!(node.operation((1,)), 2);
     }
 }
