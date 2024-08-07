@@ -29,7 +29,9 @@ macro_rules! impl_input {
         }
     };
 }
+
 impl_input!(T1);
 impl_input!(T1, T2);
 impl_input!(T1, T2, T3);
 impl_input!(T1, T2, T3, T4);
+impl_input!(T1, T2, T3, T4, T5);

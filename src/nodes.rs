@@ -50,3 +50,21 @@ impl Node<(Model, Vector3<f32>), Model> for TransformNode {
         model
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use three_d::Vector3;
+
+    #[test]
+    fn test_transform_node() {
+        let transform_node = TransformNode {};
+        let mut model = Model::new();
+        model.add_vertex(0.0, 0.0, 0.0);
+        model.add_vertex(1.0, 1.0, 1.0);
+        model.add_index(0, 1, 2);
+        let vector3 = Vector3::new(1.0, 1.0, 1.0);
+        let model = transform_node.operation((model, vector3));
+        assert_eq!(model.transform, Matrix4::from_translation(vector3));
+    }
+}
