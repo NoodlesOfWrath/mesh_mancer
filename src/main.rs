@@ -3,10 +3,6 @@ mod nodes;
 use nodes::*;
 pub mod macros;
 
-struct NodeGraph {
-    nodes: Vec<Box<dyn Node>>,
-}
-
 fn main() {
     let sphere_node = SphereNode {};
 
