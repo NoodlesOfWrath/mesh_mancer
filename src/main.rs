@@ -22,8 +22,8 @@ fn main() {
 
     let mut node_graph = NodeGraph::new();
 
-    node_graph.add_node(Box::new(sphere_node));
-    node_graph.add_node(Box::new(transform_node));
+    node_graph.add_node(sphere_node);
+    node_graph.add_node(transform_node);
 
     let mut camera = Camera::new_perspective(
         window.viewport(),

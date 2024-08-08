@@ -20,8 +20,13 @@ impl NodeGraph {
         }
     }
 
-    pub fn add_node(&mut self, node: Box<dyn NodeAny>) {
-        self.nodes.push(node);
+    pub fn add_node<N, I, O>(&mut self, node: N)
+    where
+        I: InputOrOutput<T = I> + 'static,
+        O: InputOrOutput<T = O> + 'static,
+        N: Node<I, O> + 'static,
+    {
+        self.nodes.push(Box::new(DynNode::<N, I, O>::from(node)));
     }
 }
 
@@ -31,14 +36,25 @@ pub trait NodeAny {
     fn needed_types_output(&self) -> Vec<std::any::TypeId>;
 }
 
-impl<I, O> NodeAny for dyn Node<I, O>
+struct DynNode<N, I, O>
 where
-    I: InputOrOutput<T = I> + 'static + Sized,
-    O: InputOrOutput<T = O> + 'static + Sized,
+    N: Node<I, O>,
+    I: InputOrOutput<T = I> + 'static,
+    O: InputOrOutput<T = O> + 'static,
+{
+    node: N,
+    _phantom: std::marker::PhantomData<(I, O)>,
+}
+
+impl<N, I, O> NodeAny for DynNode<N, I, O>
+where
+    N: Node<I, O>,
+    I: InputOrOutput<T = I> + 'static,
+    O: InputOrOutput<T = O> + 'static,
 {
     fn operation(&self, input: Vec<&dyn std::any::Any>) -> Box<dyn std::any::Any> {
         let input = I::convert(input);
-        Box::new(self.operation(input))
+        Box::new(self.node.operation(input))
     }
 
     fn needed_types_input(&self) -> Vec<std::any::TypeId> {
@@ -50,15 +66,33 @@ where
     }
 }
 
-pub trait Node<I: InputOrOutput, O> {
+impl<N, I, O> From<N> for DynNode<N, I, O>
+where
+    N: Node<I, O>,
+    I: InputOrOutput<T = I> + 'static,
+    O: InputOrOutput<T = O> + 'static,
+{
+    fn from(node: N) -> Self {
+        Self {
+            node,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+pub trait Node<I, O>
+where
+    I: InputOrOutput<T = I> + 'static + Sized,
+    O: InputOrOutput<T = O> + 'static + Sized,
+{
     fn operation(&self, input: I) -> O;
 }
 
 pub struct SphereNode {}
 
-impl Node<((),), Model> for SphereNode {
-    fn operation(&self, _: ((),)) -> Model {
-        let mut model = Model::new();
+impl Node<((),), (Model,)> for SphereNode {
+    fn operation(&self, _: ((),)) -> (Model,) {
+        let mut model = crate::Model::new();
 
         let sphere = CpuMesh::sphere(32);
         for vertex in sphere.positions.into_f32().iter() {
@@ -81,21 +115,21 @@ impl Node<((),), Model> for SphereNode {
                 c = None;
             }
         }
-        model
+        (model,)
     }
 }
 
 pub struct TransformNode {}
 
-impl Node<(Model, Vector3<f32>), Model> for TransformNode {
-    fn operation(&self, info: (Model, Vector3<f32>)) -> Model {
+impl Node<(Model, Vector3<f32>), (Model,)> for TransformNode {
+    fn operation(&self, info: (Model, Vector3<f32>)) -> (Model,) {
         let mut model = info.0;
         let vector3 = info.1;
 
         let transform = Matrix4::from_translation(vector3);
         model.set_transform(transform);
 
-        model
+        (model,)
     }
 }
 
@@ -107,12 +141,12 @@ mod tests {
     #[test]
     fn test_transform_node() {
         let transform_node = TransformNode {};
-        let mut model = Model::new();
+        let mut model = crate::Model::new();
         model.add_vertex(0.0, 0.0, 0.0);
         model.add_vertex(1.0, 1.0, 1.0);
         model.add_index(0, 1, 2);
         let vector3 = Vector3::new(1.0, 1.0, 1.0);
         let model = transform_node.operation((model, vector3));
-        assert_eq!(model.transform, Matrix4::from_translation(vector3));
+        assert_eq!(model.0.transform, Matrix4::from_translation(vector3));
     }
 }
