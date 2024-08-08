@@ -3,7 +3,20 @@ use std::any::{Any, TypeId};
 pub trait InputOrOutput {
     type T;
     fn convert(items: Vec<&dyn Any>) -> Self::T;
+    fn convert_output(item: &Self::T) -> Vec<Box<dyn Any>>;
     fn needed_types() -> Vec<TypeId>;
+}
+
+macro_rules! tuple_to_vec {
+    ($($elem:expr),*) => {
+        {
+            let mut vec: Vec<Box<dyn Any>> = Vec::new();
+            $(
+                vec.push(Box::new($elem) as Box<dyn Any>);
+            )*
+            vec
+        }
+    };
 }
 
 // make a macro that generates the impl Input to turn Vec<dyn Any> into (A, B, C, D)
@@ -15,6 +28,9 @@ macro_rules! impl_input {
             fn convert(items: Vec<&dyn Any>) -> Self::T {
                 let mut items = items.into_iter();
                 ($($t::clone(items.next().unwrap().downcast_ref::<$t>().unwrap()),)*)
+            }
+            fn convert_output(item: &Self::T) -> Vec<Box<dyn Any>> {
+                tuple_to_vec!(item.clone())
             }
             fn needed_types() -> Vec<TypeId> {
                 // if T is (), then we don't need any types

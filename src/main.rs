@@ -10,20 +10,27 @@ fn main() {
 
     let window = Window::new(WindowSettings {
         title: "Shapes!".to_string(),
-        max_size: Some((1280, 720)),
+        max_size: Some((2560, 1440)),
         ..Default::default()
     })
     .unwrap();
 
     let context = window.gl();
-    /*let mesh = transform_node
-    .operation((sphere_node.operation(((),)), Vector3::new(0.0, 0.0, 0.0)))
-    .into_gm(&context);*/
 
     let mut node_graph = NodeGraph::new();
 
-    node_graph.add_node(sphere_node);
-    node_graph.add_node(transform_node);
+    let sphere_node_index = node_graph.add_node(sphere_node);
+    let transform_node_index = node_graph.add_node(transform_node);
+    node_graph.connect(
+        NodeSocket::new(sphere_node_index, 0),
+        NodeSocket::new(transform_node_index, 0),
+    );
+    let output_node_index = node_graph.add_node(OutputNode {});
+    node_graph.connect(
+        NodeSocket::new(transform_node_index, 0),
+        NodeSocket::new(output_node_index, 0),
+    );
+    let mesh = node_graph.get_output().into_gm(&context);
 
     let mut camera = Camera::new_perspective(
         window.viewport(),
@@ -136,22 +143,5 @@ impl Model {
 
     fn set_transform(&mut self, transform: Matrix4<f32>) {
         self.transform = transform;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    struct PlusOneNode {}
-    impl Node<(i32,), i32> for PlusOneNode {
-        fn operation(&self, input: (i32,)) -> i32 {
-            input.0 + 1
-        }
-    }
-
-    #[test]
-    fn test() {
-        let node = PlusOneNode {};
-        assert_eq!(node.operation((1,)), 2);
     }
 }
