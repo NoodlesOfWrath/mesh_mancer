@@ -2,6 +2,30 @@ use crate::macros::Input;
 use crate::Model;
 use three_d::{CpuMesh, Matrix4, Vector3};
 
+struct NodeGraph {
+    nodes: Vec<Box<dyn NodeAny>>,
+}
+
+pub trait NodeAny {
+    fn operation(&self, input: Vec<&dyn std::any::Any>) -> Box<dyn std::any::Any>;
+    fn needed_types(&self) -> Vec<std::any::TypeId>;
+}
+
+impl<I, O> NodeAny for dyn Node<I, O>
+where
+    I: Input<T = I> + 'static + Sized,
+    O: 'static,
+{
+    fn operation(&self, input: Vec<&dyn std::any::Any>) -> Box<dyn std::any::Any> {
+        let input = I::convert(input);
+        Box::new(self.operation(input))
+    }
+
+    fn needed_types(&self) -> Vec<std::any::TypeId> {
+        I::needed_types()
+    }
+}
+
 pub trait Node<I: Input, O> {
     fn operation(&self, input: I) -> O;
 }
