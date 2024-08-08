@@ -16,9 +16,14 @@ fn main() {
     .unwrap();
 
     let context = window.gl();
-    let mesh = transform_node
-        .operation((sphere_node.operation(((),)), Vector3::new(0.0, 0.0, 0.0)))
-        .into_gm(&context);
+    /*let mesh = transform_node
+    .operation((sphere_node.operation(((),)), Vector3::new(0.0, 0.0, 0.0)))
+    .into_gm(&context);*/
+
+    let mut node_graph = NodeGraph::new();
+
+    node_graph.add_node(Box::new(sphere_node));
+    node_graph.add_node(Box::new(transform_node));
 
     let mut camera = Camera::new_perspective(
         window.viewport(),

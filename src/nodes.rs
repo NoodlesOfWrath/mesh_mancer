@@ -1,32 +1,56 @@
-use crate::macros::Input;
+use crate::macros::InputOrOutput;
 use crate::Model;
 use three_d::{CpuMesh, Matrix4, Vector3};
 
-struct NodeGraph {
+struct NodeSocket {
+    node: usize,
+    socket: usize,
+}
+
+pub struct NodeGraph {
     nodes: Vec<Box<dyn NodeAny>>,
+    connections: Vec<(NodeSocket, NodeSocket)>,
+}
+
+impl NodeGraph {
+    pub fn new() -> Self {
+        Self {
+            nodes: Vec::new(),
+            connections: Vec::new(),
+        }
+    }
+
+    pub fn add_node(&mut self, node: Box<dyn NodeAny>) {
+        self.nodes.push(node);
+    }
 }
 
 pub trait NodeAny {
     fn operation(&self, input: Vec<&dyn std::any::Any>) -> Box<dyn std::any::Any>;
-    fn needed_types(&self) -> Vec<std::any::TypeId>;
+    fn needed_types_input(&self) -> Vec<std::any::TypeId>;
+    fn needed_types_output(&self) -> Vec<std::any::TypeId>;
 }
 
 impl<I, O> NodeAny for dyn Node<I, O>
 where
-    I: Input<T = I> + 'static + Sized,
-    O: 'static,
+    I: InputOrOutput<T = I> + 'static + Sized,
+    O: InputOrOutput<T = O> + 'static + Sized,
 {
     fn operation(&self, input: Vec<&dyn std::any::Any>) -> Box<dyn std::any::Any> {
         let input = I::convert(input);
         Box::new(self.operation(input))
     }
 
-    fn needed_types(&self) -> Vec<std::any::TypeId> {
+    fn needed_types_input(&self) -> Vec<std::any::TypeId> {
         I::needed_types()
+    }
+
+    fn needed_types_output(&self) -> Vec<std::any::TypeId> {
+        O::needed_types()
     }
 }
 
-pub trait Node<I: Input, O> {
+pub trait Node<I: InputOrOutput, O> {
     fn operation(&self, input: I) -> O;
 }
 

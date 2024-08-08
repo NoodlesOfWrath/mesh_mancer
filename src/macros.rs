@@ -1,6 +1,6 @@
 use std::any::{Any, TypeId};
 
-pub trait Input {
+pub trait InputOrOutput {
     type T;
     fn convert(items: Vec<&dyn Any>) -> Self::T;
     fn needed_types() -> Vec<TypeId>;
@@ -10,7 +10,7 @@ pub trait Input {
 // make sure T1, T2, T3, T4 are Clone and 'static
 macro_rules! impl_input {
     ($($t:ident),*) => {
-        impl<$($t: Clone + 'static),*> Input for ($($t,)*) {
+        impl<$($t: Clone + 'static),*> InputOrOutput for ($($t,)*) {
             type T = ($($t,)*);
             fn convert(items: Vec<&dyn Any>) -> Self::T {
                 let mut items = items.into_iter();
