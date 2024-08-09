@@ -29,15 +29,10 @@ macro_rules! impl_input {
                 let mut items = items;
                 let new_item = Box::new(()) as Box<dyn Any>;
                 if TypeId::of::<Self::T>() == TypeId::of::<((),)>() {
-                    println!("No types needed!");
                     items.push(&*new_item as &dyn Any);
                 }
 
-                println!("Converting to {:?}", TypeId::of::<Self::T>());
-                println!("Model typeid: {:?}", TypeId::of::<crate::Model>());
-                println!("(Model,) typeid: {:?}", TypeId::of::<(crate::Model,)>());
                 let mut items = items.into_iter();
-                println!("Typeids: {:?}", items.clone().map(|item| item.type_id()).collect::<Vec<_>>());
 
                 ($($t::clone(items.next().expect("Not enough elements!").downcast_ref::<$t>().expect("Wrong type!")),)*)
             }

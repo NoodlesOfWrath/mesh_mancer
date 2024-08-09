@@ -1,7 +1,9 @@
 use three_d::*;
+mod node;
+use node::*;
+pub mod macros;
 mod nodes;
 use nodes::*;
-pub mod macros;
 
 fn main() {
     let sphere_node = SphereNode {};
@@ -10,7 +12,7 @@ fn main() {
 
     let window = Window::new(WindowSettings {
         title: "Shapes!".to_string(),
-        max_size: Some((2560, 1440)),
+        max_size: Some((800, 450)),
         ..Default::default()
     })
     .unwrap();
@@ -20,21 +22,40 @@ fn main() {
     let mut node_graph = NodeGraph::new();
 
     let sphere_node_index = node_graph.add_node(sphere_node);
-    let transform_node_index = node_graph.add_node(transform_node);
+    let instatiate_node_index = node_graph.add_node(InstatiateOnPointsNode {});
+    let scale_node_index = node_graph.add_node(ScaleInstanceNode {});
+    let merge_node_index = node_graph.add_node(MergeNode {});
+    let scale_value_node_index = node_graph.add_node(ValueNode::new(0.01 as f32));
     let output_node_index = node_graph.add_node(OutputNode {});
-    let transform_value_node_index =
-        node_graph.add_node(ValueNode::new(vec3(0.0 as f32, 0.0, 10.0)));
+
     node_graph.connect(
         NodeSocket::new(sphere_node_index, 0),
-        NodeSocket::new(transform_node_index, 0),
+        NodeSocket::new(instatiate_node_index, 0),
     );
+
     node_graph.connect(
-        NodeSocket::new(transform_node_index, 0),
+        NodeSocket::new(sphere_node_index, 0),
+        NodeSocket::new(instatiate_node_index, 1),
+    );
+
+    node_graph.connect(
+        NodeSocket::new(instatiate_node_index, 0),
+        NodeSocket::new(scale_node_index, 0),
+    );
+
+    node_graph.connect(
+        NodeSocket::new(scale_value_node_index, 0),
+        NodeSocket::new(scale_node_index, 1),
+    );
+
+    node_graph.connect(
+        NodeSocket::new(scale_node_index, 0),
+        NodeSocket::new(merge_node_index, 0),
+    );
+
+    node_graph.connect(
+        NodeSocket::new(merge_node_index, 0),
         NodeSocket::new(output_node_index, 0),
-    );
-    node_graph.connect(
-        NodeSocket::new(transform_value_node_index, 0),
-        NodeSocket::new(transform_node_index, 1),
     );
 
     let mesh = node_graph.get_output().into_gm(&context);
@@ -150,5 +171,27 @@ impl Model {
 
     fn set_transform(&mut self, transform: Matrix4<f32>) {
         self.transform = transform;
+    }
+
+    fn transform(&self) -> Matrix4<f32> {
+        self.transform
+    }
+
+    fn merge(&mut self, other: &Model) {
+        let offset = self.vertices.len() as u32;
+        for vertex in other.vertices.iter() {
+            let mut point = Point3 {
+                x: vertex.x,
+                y: vertex.y,
+                z: vertex.z,
+            };
+
+            point = self.transform.transform_point(point);
+
+            self.vertices.push(Vector3::new(point.x, point.y, point.z));
+        }
+        self.indices
+            .extend(other.indices.iter().map(|i| i + offset));
+        self.normals.extend(other.normals.iter());
     }
 }
