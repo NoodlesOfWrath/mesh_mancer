@@ -26,11 +26,23 @@ macro_rules! impl_input {
         impl<$($t: Clone + 'static),*> InputOrOutput for ($($t,)*) {
             type T = ($($t,)*);
             fn convert(items: Vec<&dyn Any>) -> Self::T {
+                let mut items = items;
+                let new_item = Box::new(()) as Box<dyn Any>;
+                if TypeId::of::<Self::T>() == TypeId::of::<((),)>() {
+                    println!("No types needed!");
+                    items.push(&*new_item as &dyn Any);
+                }
+
+                println!("Converting to {:?}", TypeId::of::<Self::T>());
+                println!("Model typeid: {:?}", TypeId::of::<crate::Model>());
+                println!("(Model,) typeid: {:?}", TypeId::of::<(crate::Model,)>());
                 let mut items = items.into_iter();
-                ($($t::clone(items.next().unwrap().downcast_ref::<$t>().unwrap()),)*)
+                println!("Typeids: {:?}", items.clone().map(|item| item.type_id()).collect::<Vec<_>>());
+
+                ($($t::clone(items.next().expect("Not enough elements!").downcast_ref::<$t>().expect("Wrong type!")),)*)
             }
-            fn convert_output(item: &Self::T) -> Vec<Box<dyn Any>> {
-                tuple_to_vec!(item.clone())
+            fn convert_output(($($t,)*): &Self::T) -> Vec<Box<dyn Any>> {
+                tuple_to_vec!($($t.clone()),*)
             }
             fn needed_types() -> Vec<TypeId> {
                 // if T is (), then we don't need any types

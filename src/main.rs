@@ -21,15 +21,22 @@ fn main() {
 
     let sphere_node_index = node_graph.add_node(sphere_node);
     let transform_node_index = node_graph.add_node(transform_node);
+    let output_node_index = node_graph.add_node(OutputNode {});
+    let transform_value_node_index =
+        node_graph.add_node(ValueNode::new(vec3(0.0 as f32, 0.0, 10.0)));
     node_graph.connect(
         NodeSocket::new(sphere_node_index, 0),
         NodeSocket::new(transform_node_index, 0),
     );
-    let output_node_index = node_graph.add_node(OutputNode {});
     node_graph.connect(
         NodeSocket::new(transform_node_index, 0),
         NodeSocket::new(output_node_index, 0),
     );
+    node_graph.connect(
+        NodeSocket::new(transform_value_node_index, 0),
+        NodeSocket::new(transform_node_index, 1),
+    );
+
     let mesh = node_graph.get_output().into_gm(&context);
 
     let mut camera = Camera::new_perspective(

@@ -88,8 +88,15 @@ impl NodeGraph {
 
     pub fn get_output_of_node(&self, node: usize) -> Vec<Box<dyn Any>> {
         // if the node has no inputs, then we can just call the operation
-        if self.nodes_elements[node].inputs.is_empty() {
-            return self.nodes_elements[node].node.operation(Vec::new());
+        if self.nodes_elements[node]
+            .node
+            .needed_types_input()
+            .is_empty()
+        {
+            println!("Node: {}", node);
+            let operation_result = self.nodes_elements[node].node.operation(Vec::new());
+            println!("Operation result: {:?}", operation_result);
+            operation_result
         } else {
             // if the node has inputs, then we need to get the output of the inputs
             let mut inputs = Vec::new();
@@ -118,12 +125,8 @@ impl NodeGraph {
             // sort the inputs by the socket index
             inputs.sort_by(|a, b| a.1.cmp(&b.1));
 
-            for (i, input) in inputs.iter().enumerate() {
-                if i != input.1 {
-                    // this will only print the first missing input
-                    // but, it's gonna panic anyway so i think it's fine
-                    panic!("Missing input for socket {}", i);
-                }
+            if inputs.len() != self.nodes_elements[node].node.needed_types_input().len() {
+                panic!("Not enough inputs for node {}", node);
             }
 
             // get the references of the inputs as well as discarding the socket index
@@ -243,6 +246,25 @@ impl Node<(Model, Vector3<f32>), (Model,)> for TransformNode {
         model.set_transform(transform);
 
         (model,)
+    }
+}
+
+pub struct ValueNode<T> {
+    value: T,
+}
+
+impl<T> ValueNode<T> {
+    pub fn new(value: T) -> Self {
+        Self { value }
+    }
+}
+
+impl<T> Node<((),), (T,)> for ValueNode<T>
+where
+    T: Clone + 'static,
+{
+    fn operation(&self, _: ((),)) -> (T,) {
+        (self.value.clone(),)
     }
 }
 
