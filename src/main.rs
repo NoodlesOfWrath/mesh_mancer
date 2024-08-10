@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+
 use three_d::*;
 mod node;
 use node::*;
@@ -25,7 +27,7 @@ fn main() {
     let instatiate_node_index = node_graph.add_node(InstatiateOnPointsNode {});
     let scale_node_index = node_graph.add_node(ScaleInstanceNode {});
     let merge_node_index = node_graph.add_node(MergeNode {});
-    let scale_value_node_index = node_graph.add_node(ValueNode::new(0.01 as f32));
+    let scale_value_node_index = node_graph.add_node(ValueNode::new(0.1 as f32));
     let output_node_index = node_graph.add_node(OutputNode {});
 
     node_graph.connect(
@@ -58,7 +60,7 @@ fn main() {
         NodeSocket::new(output_node_index, 0),
     );
 
-    let mesh = node_graph.get_output().into_gm(&context);
+    let mesh = node_graph.get_output().into_gms(&context);
 
     let mut camera = Camera::new_perspective(
         window.viewport(),
@@ -119,7 +121,73 @@ impl Model {
         self.normals_calculated = false;
     }
 
-    fn into_gm(&mut self, context: &Context) -> Gm<Mesh, PhysicalMaterial> {
+    fn get_island(&self, index: u32) -> Model {
+        let mut model = Model::new();
+        // the immediate neighbors of each vertex
+        let mut connections = HashMap::new();
+
+        for i in 0..self.indices.len() / 3 {
+            let a = self.indices[i * 3];
+            let b = self.indices[i * 3 + 1];
+            let c = self.indices[i * 3 + 2];
+            connections.entry(a).or_insert_with(HashSet::new).insert(b);
+            connections.entry(a).or_insert_with(HashSet::new).insert(c);
+            connections.entry(b).or_insert_with(HashSet::new).insert(a);
+            connections.entry(b).or_insert_with(HashSet::new).insert(c);
+            connections.entry(c).or_insert_with(HashSet::new).insert(a);
+            connections.entry(c).or_insert_with(HashSet::new).insert(b);
+        }
+
+        let mut stack = vec![index];
+        let mut model_index_map = HashMap::new();
+
+        while let Some(current) = stack.pop() {
+            model.add_vertex(
+                self.vertices[current as usize].x,
+                self.vertices[current as usize].y,
+                self.vertices[current as usize].z,
+            );
+            model_index_map.insert(current, model.vertices.len() as u32 - 1);
+
+            for neighbor in connections.get(&current).unwrap() {
+                if !model.vertices.contains(&self.vertices[*neighbor as usize]) {
+                    stack.push(*neighbor);
+                }
+            }
+        }
+
+        for i in 0..self.indices.len() / 3 {
+            let a = self.indices[i * 3];
+            let b = self.indices[i * 3 + 1];
+            let c = self.indices[i * 3 + 2];
+            if a == index || b == index || c == index {
+                model.add_index(
+                    *model_index_map.get(&a).unwrap(),
+                    *model_index_map.get(&b).unwrap(),
+                    *model_index_map.get(&c).unwrap(),
+                );
+            }
+        }
+
+        model
+    }
+
+    fn seperate_parts(&self) -> Vec<Model> {
+        let mut models = Vec::new();
+        let mut visited: HashSet<u32> = HashSet::new();
+
+        for i in 0..self.vertices.len() {
+            if !visited.contains(&(i as u32)) {
+                let island = self.get_island(i as u32);
+                visited.extend(island.indices.iter());
+                models.push(island);
+            }
+        }
+
+        models
+    }
+
+    fn into_gm_single(&mut self, context: &Context) -> Gm<Mesh, PhysicalMaterial> {
         if !self.normals_calculated {
             self.auto_generate_normals();
         }
@@ -150,6 +218,17 @@ impl Model {
         gm.set_transformation(self.transform);
 
         gm
+    }
+
+    fn into_gms(&mut self, context: &Context) -> Vec<Gm<Mesh, PhysicalMaterial>> {
+        let mut gms = Vec::new();
+
+        for mut model in self.seperate_parts() {
+            gms.push(model.into_gm_single(context));
+        }
+        println!("gms: {}", gms.len());
+
+        gms
     }
 
     fn auto_generate_normals(&mut self) {

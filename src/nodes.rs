@@ -50,7 +50,7 @@ impl Node<((),), (Model,)> for SphereNode {
     fn operation(&self, _: ((),)) -> (Model,) {
         let mut model = crate::Model::new();
 
-        let sphere = CpuMesh::sphere(8);
+        let sphere = CpuMesh::sphere(4);
         for vertex in sphere.positions.into_f32().iter() {
             model.add_vertex(vertex.x, vertex.y, vertex.z);
         }
@@ -81,6 +81,8 @@ impl Node<(Model, Model), (Vec<Model>,)> for InstatiateOnPointsNode {
     fn operation(&self, info: (Model, Model)) -> (Vec<Model>,) {
         let model = info.0;
         let points = info.1;
+
+        println!("spawning: {} instances", points.vertices.iter().count());
 
         let mut models = Vec::new();
         for vertex in points.vertices.iter() {
