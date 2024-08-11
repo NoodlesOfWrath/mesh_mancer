@@ -60,7 +60,9 @@ fn main() {
         NodeSocket::new(output_node_index, 0),
     );
 
-    let mesh = node_graph.get_output().into_gms(&context);
+    //let mesh = node_graph.get_output().into_gms(&context);
+    let mesh = node_graph.get_output().into_gm_single(&context);
+    //println!("mesh: {}", mesh.len());
 
     let mut camera = Camera::new_perspective(
         window.viewport(),
@@ -121,67 +123,88 @@ impl Model {
         self.normals_calculated = false;
     }
 
-    fn get_island(&self, index: u32) -> Model {
-        let mut model = Model::new();
-        // the immediate neighbors of each vertex
-        let mut connections = HashMap::new();
-
-        for i in 0..self.indices.len() / 3 {
-            let a = self.indices[i * 3];
-            let b = self.indices[i * 3 + 1];
-            let c = self.indices[i * 3 + 2];
-            connections.entry(a).or_insert_with(HashSet::new).insert(b);
-            connections.entry(a).or_insert_with(HashSet::new).insert(c);
-            connections.entry(b).or_insert_with(HashSet::new).insert(a);
-            connections.entry(b).or_insert_with(HashSet::new).insert(c);
-            connections.entry(c).or_insert_with(HashSet::new).insert(a);
-            connections.entry(c).or_insert_with(HashSet::new).insert(b);
-        }
-
-        let mut stack = vec![index];
-        let mut model_index_map = HashMap::new();
-
-        while let Some(current) = stack.pop() {
-            model.add_vertex(
-                self.vertices[current as usize].x,
-                self.vertices[current as usize].y,
-                self.vertices[current as usize].z,
-            );
-            model_index_map.insert(current, model.vertices.len() as u32 - 1);
-
-            for neighbor in connections.get(&current).unwrap() {
-                if !model.vertices.contains(&self.vertices[*neighbor as usize]) {
-                    stack.push(*neighbor);
-                }
-            }
-        }
-
-        for i in 0..self.indices.len() / 3 {
-            let a = self.indices[i * 3];
-            let b = self.indices[i * 3 + 1];
-            let c = self.indices[i * 3 + 2];
-            if a == index || b == index || c == index {
-                model.add_index(
-                    *model_index_map.get(&a).unwrap(),
-                    *model_index_map.get(&b).unwrap(),
-                    *model_index_map.get(&c).unwrap(),
-                );
-            }
-        }
-
-        model
-    }
-
     fn seperate_parts(&self) -> Vec<Model> {
         let mut models = Vec::new();
-        let mut visited: HashSet<u32> = HashSet::new();
+        let mut sets: Vec<(HashSet<u32>, Vec<u32>)> = vec![];
 
-        for i in 0..self.vertices.len() {
-            if !visited.contains(&(i as u32)) {
-                let island = self.get_island(i as u32);
-                visited.extend(island.indices.iter());
-                models.push(island);
+        for index in self.indices.chunks(3) {
+            let mut found = false;
+            'set_loop: for set in sets.iter_mut() {
+                for i in index.iter() {
+                    if set.0.contains(i) {
+                        set.0.insert(index[0]);
+                        set.0.insert(index[1]);
+                        set.0.insert(index[2]);
+                        set.1.extend(index[0..3].to_vec());
+                        found = true;
+                        break 'set_loop;
+                    }
+                }
             }
+            if !found {
+                let mut set = HashSet::new();
+                set.extend(index[0..3].iter());
+                sets.push((set, index[0..3].to_vec()));
+            }
+        }
+
+        let mut index_to_remove = None;
+        // merge the sets
+        'outer_loop: loop {
+            if let Some(index) = index_to_remove {
+                sets.remove(index);
+            }
+            let set_clone = sets.clone();
+            for (mutable_set_index, set) in sets.iter_mut().enumerate() {
+                for (i, other_set) in set_clone.iter().enumerate() {
+                    if mutable_set_index == i {
+                        continue;
+                    }
+                    if set.0.intersection(&other_set.0).count() > 0 {
+                        set.0.extend(other_set.0.iter());
+                        set.1.extend(other_set.1.iter());
+                        index_to_remove = Some(i);
+                        // restart the search as the sets have changed
+                        continue 'outer_loop;
+                    }
+                }
+            }
+            break;
+        }
+
+        let mut global_to_local_indices = vec![];
+        for set in sets.iter() {
+            let mut global_to_local_index = HashMap::new();
+            let sorted = set.0.iter().collect::<Vec<&u32>>();
+
+            for (i, index) in sorted.iter().enumerate() {
+                global_to_local_index.insert(*index, i as u32);
+            }
+            global_to_local_indices.push(global_to_local_index);
+        }
+
+        for (i, set) in sets.iter().enumerate() {
+            let global_to_local_index = &global_to_local_indices[i];
+
+            let mut model = Model::new();
+            for index in set.1.chunks(3) {
+                model.add_index(
+                    global_to_local_index[&index[0]],
+                    global_to_local_index[&index[1]],
+                    global_to_local_index[&index[2]],
+                );
+            }
+            for index in set.0.iter() {
+                model.add_vertex(
+                    self.vertices[*index as usize].x,
+                    self.vertices[*index as usize].y,
+                    self.vertices[*index as usize].z,
+                );
+            }
+
+            model.set_transform(self.transform);
+
+            models.push(model);
         }
 
         models
@@ -226,7 +249,6 @@ impl Model {
         for mut model in self.seperate_parts() {
             gms.push(model.into_gm_single(context));
         }
-        println!("gms: {}", gms.len());
 
         gms
     }
@@ -265,7 +287,7 @@ impl Model {
                 z: vertex.z,
             };
 
-            point = self.transform.transform_point(point);
+            point = other.transform.transform_point(point);
 
             self.vertices.push(Vector3::new(point.x, point.y, point.z));
         }
