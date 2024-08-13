@@ -50,7 +50,7 @@ impl Node<((),), (Model,)> for SphereNode {
     fn operation(&self, _: ((),)) -> (Model,) {
         let mut model = crate::Model::new();
 
-        let sphere = CpuMesh::sphere(4);
+        let sphere = CpuMesh::sphere(6);
         for vertex in sphere.positions.into_f32().iter() {
             model.add_vertex(vertex.x, vertex.y, vertex.z);
         }
