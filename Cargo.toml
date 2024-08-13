@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-eframe = {path = "../eframe-0.28.1-clone", features = ["glow"]}
+eframe = {version = "0.28.1", features = ["glow"]}
 three-d = {version = "0.17.0", features = ["headless"]}
 
 egui_extras = { version = "*", features = ["all_loaders"] }

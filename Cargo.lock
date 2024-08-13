@@ -1234,6 +1234,8 @@ dependencies = [
 [[package]]
 name = "eframe"
 version = "0.28.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6490ef800b2e41ee129b1f32f9ac15f713233fe3bc18e241a1afe1e4fb6811e0"
 dependencies = [
  "ahash",
  "bytemuck",

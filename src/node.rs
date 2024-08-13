@@ -132,12 +132,21 @@ impl NodeGraph {
             self.nodes_elements[node].node.operation(input_refs)
         }
     }
+
+    pub fn get_nodes(&self) -> Vec<&dyn NodeAny> {
+        self.nodes_elements
+            .iter()
+            .map(|x| x.node.as_ref())
+            .collect()
+    }
 }
 
 pub trait NodeAny {
     fn operation(&self, input: Vec<&dyn std::any::Any>) -> Vec<Box<dyn std::any::Any>>;
     fn needed_types_input(&self) -> Vec<std::any::TypeId>;
     fn needed_types_output(&self) -> Vec<std::any::TypeId>;
+    fn name(&self) -> &str;
+    fn description(&self) -> &str;
 }
 
 struct DynNode<N, I, O>
@@ -148,6 +157,8 @@ where
 {
     node: N,
     _phantom: std::marker::PhantomData<(I, O)>,
+    name: String,
+    description: String,
 }
 
 impl<N, I, O> NodeAny for DynNode<N, I, O>
@@ -169,6 +180,14 @@ where
     fn needed_types_output(&self) -> Vec<std::any::TypeId> {
         O::needed_types()
     }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn description(&self) -> &str {
+        &self.description
+    }
 }
 
 impl<N, I, O> From<N> for DynNode<N, I, O>
@@ -178,9 +197,16 @@ where
     O: InputOrOutput<T = O> + 'static,
 {
     fn from(node: N) -> Self {
+        let mut name = std::any::type_name::<N>().to_string();
+        if N::name() != "" {
+            name = N::name().to_string();
+        }
+
         Self {
             node,
             _phantom: std::marker::PhantomData,
+            name,
+            description: N::description(),
         }
     }
 }
@@ -191,4 +217,10 @@ where
     O: InputOrOutput<T = O> + 'static + Sized,
 {
     fn operation(&self, input: I) -> O;
+    fn name() -> String {
+        "".to_string()
+    }
+    fn description() -> String {
+        "".to_string()
+    }
 }
