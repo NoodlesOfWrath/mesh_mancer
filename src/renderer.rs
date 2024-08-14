@@ -2,13 +2,16 @@ use eframe::{
     egui::{
         load::{Bytes, SizedTexture},
         pos2, vec2, Area, CentralPanel, Color32, Frame, Id, ImageSource, Pos2, Rect, Rounding,
-        Sense, Shadow, Stroke, Vec2,
+        Sense, Shadow, Vec2,
     },
     run_native, App, HardwareAcceleration, NativeOptions, Renderer,
 };
 use three_d::*;
 
 use crate::{NodeAny, NodeGraph};
+
+use std::hash::Hash;
+use std::hash::Hasher;
 
 struct ColorScheme {
     background: Color32,
@@ -56,7 +59,6 @@ impl VisualNodeGraph {
 
     fn step(&mut self) {
         const SPEED: f32 = 0.03;
-        const DISTANCE: f32 = 150.0;
 
         // move the nodes away from each other
         for i in 0..self.node_graph.get_nodes().len() {
@@ -65,19 +67,35 @@ impl VisualNodeGraph {
                     continue;
                 }
 
+                // the positions are in the left top corner of the node
+                // if the nodes are overlapping, move them away from each other
                 let pos_i = self.get_node_position(i);
                 let pos_j = self.get_node_position(j);
-                let distance = pos_i.distance(pos_j);
-                if distance == 0.0 {
-                    let new_pos_i = pos_i + vec2(1.0, 1.0) * SPEED;
-                    self.set_node_position(i, new_pos_i);
-                } else if distance < DISTANCE {
-                    let direction = pos_i - pos_j;
-                    let direction = direction / distance;
-                    let new_pos_i = pos_i + direction * SPEED * (DISTANCE - distance) / 2.0;
+                let size_i = self.get_node_size(i);
+                let size_j = self.get_node_size(j);
 
-                    self.set_node_position(i, new_pos_i);
+                println!("{} {}", size_i.x, size_i.y);
+
+                let i_right = pos_i.x + size_i.x;
+                let i_left = pos_i.x;
+                let i_bottom = pos_i.y + size_i.y;
+                let i_top = pos_i.y;
+
+                let j_right = pos_j.x + size_j.x;
+                let j_left = pos_j.x;
+                let j_bottom = pos_j.y + size_j.y;
+                let j_top = pos_j.y;
+
+                let mut movement = vec2(0.0, 0.0);
+                // cover each condition where the nodes are overlapping
+                if i_right > j_left && i_left < j_right && i_bottom > j_top && i_top < j_bottom {
+                    // move the centers away from each other
+                    let center_i = pos_i + size_i / 2.0;
+                    let center_j = pos_j + size_j / 2.0;
+                    movement = center_i - center_j;
                 }
+
+                self.set_node_position(i, pos_i + movement * SPEED);
             }
         }
     }
@@ -125,31 +143,36 @@ impl App for NodeGraphRenderer {
                 for i in 0..self.visual_node_graph.node_graph.get_nodes().len() {
                     let node = self.visual_node_graph.node_graph.get_node(i);
 
-                    let new_pos = show_node(
+                    let response = show_node(
                         node,
                         self.visual_node_graph.get_node_position(i),
-                        ui,
                         ctx,
                         &self.visual_node_graph.scheme,
                     );
 
-                    self.visual_node_graph.set_node_position(i, new_pos);
+                    self.visual_node_graph.set_node_position(i, response.pos);
+                    self.visual_node_graph.set_node_size(i, response.size);
                 }
 
                 //ui.image(ImageSource::Uri("color".into()));
             });
 
+        // i don't really feel like this is correct or necessary but it's here for now
         ctx.request_repaint();
     }
+}
+
+struct NodeResponse {
+    pos: Pos2,
+    size: Vec2,
 }
 
 fn show_node(
     node: &dyn NodeAny,
     pos: Pos2,
-    ui: &mut eframe::egui::Ui,
     ctx: &eframe::egui::Context,
     scheme: &ColorScheme,
-) -> Pos2 {
+) -> NodeResponse {
     // Create a frame with rounded corners
     let container = Frame::default()
         .rounding(12.0)
@@ -168,31 +191,39 @@ fn show_node(
 
     let response = area.show(ctx, |ui| {
         // display a number of spheres equal to the number of inputs on the left of the node
+        ui.horizontal(|ui| {
+            ui.vertical(|ui| {
+                for needed_type in node.needed_types_input() {
+                    let (rect, painter) =
+                        ui.allocate_painter(Vec2::new(10.0, 10.0), Sense::hover());
 
-        container.show(ui, |ui| {
-            ui.label(node.name()).on_hover_text(node.description());
-            for needed_type in node.needed_types_input() {
-                let (rect, painter) = ui.allocate_painter(Vec2::new(100.0, 100.0), Sense::hover());
+                    let center = rect.rect.right_center();
+                    let radius = 5.0;
+                    // hash the type id to get a color
+                    let color = hash_type_id(needed_type);
 
-                let center = rect.rect.center();
-                let radius = 5.0;
-                // hash the type id to get a color
-                let color = hash_type_id(needed_type);
-
-                painter.circle_filled(center, radius, Color32::from_gray(100));
-            }
+                    painter.circle_filled(center, radius, color);
+                }
+            });
+            container.show(ui, |ui| {
+                ui.label(node.name()).on_hover_text(node.description());
+            });
         });
     });
 
     if response.response.dragged() {
-        return pos + response.response.drag_delta();
+        let new_pos = pos + response.response.drag_delta();
+        return NodeResponse {
+            pos: new_pos,
+            size: response.response.rect.size(),
+        };
     }
 
-    pos
+    NodeResponse {
+        pos,
+        size: response.response.rect.size(),
+    }
 }
-
-use std::hash::Hash;
-use std::hash::Hasher;
 
 fn hash_type_id(type_id: std::any::TypeId) -> Color32 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
