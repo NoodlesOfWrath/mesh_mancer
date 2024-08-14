@@ -2,9 +2,9 @@ use eframe::{
     egui::{
         load::{Bytes, SizedTexture},
         pos2, vec2, Area, CentralPanel, Color32, Frame, Id, ImageSource, Pos2, Rect, Rounding,
-        Shadow,
+        Sense, Shadow, Stroke, Vec2,
     },
-    run_native, App, NativeOptions, Renderer,
+    run_native, App, HardwareAcceleration, NativeOptions, Renderer,
 };
 use three_d::*;
 
@@ -26,12 +26,10 @@ struct VisualNodeGraph {
 
 impl VisualNodeGraph {
     fn setup_positions(&mut self) {
-        let mut positions = Vec::new();
-        let mut sizes = Vec::new();
-        for _ in 0..self.node_graph.get_nodes().len() {
-            positions.push(pos2(0.0, 0.0));
-            sizes.push(vec2(100.0, 100.0));
-        }
+        const DEFAULT_POSITION: Pos2 = pos2(200.0, 200.0);
+        const DEFAULT_SIZE: Vec2 = vec2(100.0, 100.0);
+        let mut positions = vec![DEFAULT_POSITION; self.node_graph.get_nodes().len()];
+        let mut sizes = vec![DEFAULT_SIZE; self.node_graph.get_nodes().len()];
         self.positions = positions;
         self.sizes = sizes;
     }
@@ -52,8 +50,13 @@ impl VisualNodeGraph {
         self.sizes[node_index] = size;
     }
 
+    fn init(&mut self) {
+        self.setup_positions();
+    }
+
     fn step(&mut self) {
-        const SPEED: f32 = 0.1;
+        const SPEED: f32 = 0.03;
+        const DISTANCE: f32 = 150.0;
 
         // move the nodes away from each other
         for i in 0..self.node_graph.get_nodes().len() {
@@ -68,10 +71,10 @@ impl VisualNodeGraph {
                 if distance == 0.0 {
                     let new_pos_i = pos_i + vec2(1.0, 1.0) * SPEED;
                     self.set_node_position(i, new_pos_i);
-                } else if distance < 100.0 {
+                } else if distance < DISTANCE {
                     let direction = pos_i - pos_j;
                     let direction = direction / distance;
-                    let new_pos_i = pos_i + direction * SPEED * (100.0 - distance) / 2.0;
+                    let new_pos_i = pos_i + direction * SPEED * (DISTANCE - distance) / 2.0;
 
                     self.set_node_position(i, new_pos_i);
                 }
@@ -82,6 +85,7 @@ impl VisualNodeGraph {
 
 struct NodeGraphRenderer {
     visual_node_graph: VisualNodeGraph,
+    was_dragging: bool,
     //three_d_info: ThreeDInfo,
 }
 
@@ -106,36 +110,46 @@ impl App for NodeGraphRenderer {
         CentralPanel::default()
             .frame(Frame::default().fill(self.visual_node_graph.scheme.background))
             .show(ctx, |ui| {
-                self.visual_node_graph.step();
+                self.was_dragging = false;
+                ctx.input(|input| {
+                    if input.pointer.any_down() {
+                        self.was_dragging = true;
+                    }
+                });
+
+                if !self.was_dragging {
+                    self.visual_node_graph.step();
+                }
+
                 // add a node to the graph
-                for (i, node) in self
-                    .visual_node_graph
-                    .node_graph
-                    .get_nodes()
-                    .iter()
-                    .enumerate()
-                {
-                    spawn_node(
-                        *node,
+                for i in 0..self.visual_node_graph.node_graph.get_nodes().len() {
+                    let node = self.visual_node_graph.node_graph.get_node(i);
+
+                    let new_pos = show_node(
+                        node,
                         self.visual_node_graph.get_node_position(i),
                         ui,
                         ctx,
                         &self.visual_node_graph.scheme,
                     );
+
+                    self.visual_node_graph.set_node_position(i, new_pos);
                 }
 
                 //ui.image(ImageSource::Uri("color".into()));
             });
+
+        ctx.request_repaint();
     }
 }
 
-fn spawn_node(
+fn show_node(
     node: &dyn NodeAny,
     pos: Pos2,
     ui: &mut eframe::egui::Ui,
     ctx: &eframe::egui::Context,
     scheme: &ColorScheme,
-) {
+) -> Pos2 {
     // Create a frame with rounded corners
     let container = Frame::default()
         .rounding(12.0)
@@ -148,17 +162,47 @@ fn spawn_node(
             color: Color32::BLACK,
         });
 
-    Area::new(Id::new(node.name()))
-        .fixed_pos(pos)
-        .show(ctx, |ui| {
-            container.show(ui, |ui| {
-                ui.label(node.name()).on_hover_text(node.description());
-            });
+    let area = Area::new(Id::new(node.name()))
+        .current_pos(pos)
+        .movable(true);
+
+    let response = area.show(ctx, |ui| {
+        // display a number of spheres equal to the number of inputs on the left of the node
+
+        container.show(ui, |ui| {
+            ui.label(node.name()).on_hover_text(node.description());
+            for needed_type in node.needed_types_input() {
+                let (rect, painter) = ui.allocate_painter(Vec2::new(100.0, 100.0), Sense::hover());
+
+                let center = rect.rect.center();
+                let radius = 5.0;
+                // hash the type id to get a color
+                let color = hash_type_id(needed_type);
+
+                painter.circle_filled(center, radius, Color32::from_gray(100));
+            }
         });
+    });
+
+    if response.response.dragged() {
+        return pos + response.response.drag_delta();
+    }
+
+    pos
+}
+
+use std::hash::Hash;
+use std::hash::Hasher;
+
+fn hash_type_id(type_id: std::any::TypeId) -> Color32 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    type_id.hash(&mut hasher);
+    let hash = hasher.finish();
+    Color32::from_rgb(hash as u8, (hash >> 8) as u8, (hash >> 16) as u8)
 }
 
 pub fn run() {
-    let mut node_graph = crate::example();
+    let node_graph = crate::example();
     let midnight_scheme = ColorScheme {
         background: Color32::from_gray(50),
         node_background: Color32::from_gray(0),
@@ -170,13 +214,15 @@ pub fn run() {
         sizes: Vec::new(),
         scheme: midnight_scheme,
     };
-    visual_node_graph.setup_positions();
+    visual_node_graph.init();
 
     let app = NodeGraphRenderer {
         visual_node_graph: visual_node_graph,
+        was_dragging: false,
         //three_d_info: setup_three_d(),
     };
     let mut win_options = NativeOptions::default();
+    win_options.hardware_acceleration = HardwareAcceleration::Preferred;
 
     let result = run_native(
         "Node Graph",

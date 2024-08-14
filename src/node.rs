@@ -139,6 +139,10 @@ impl NodeGraph {
             .map(|x| x.node.as_ref())
             .collect()
     }
+
+    pub fn get_node(&self, index: usize) -> &dyn NodeAny {
+        self.nodes_elements[index].node.as_ref()
+    }
 }
 
 pub trait NodeAny {

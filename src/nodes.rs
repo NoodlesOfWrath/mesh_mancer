@@ -73,6 +73,14 @@ impl Node<((),), (Model,)> for SphereNode {
         }
         (model,)
     }
+
+    fn name() -> String {
+        "Sphere".to_string()
+    }
+
+    fn description() -> String {
+        "Generates a sphere".to_string()
+    }
 }
 
 pub struct InstatiateOnPointsNode {}
