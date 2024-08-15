@@ -136,7 +136,7 @@ impl App for NodeGraphRenderer {
                 });
 
                 if !self.was_dragging {
-                    self.visual_node_graph.step();
+                    //self.visual_node_graph.step();
                 }
 
                 // add a node to the graph
@@ -197,7 +197,7 @@ fn show_node(
                     let (rect, painter) =
                         ui.allocate_painter(Vec2::new(10.0, 10.0), Sense::hover());
 
-                    let center = rect.rect.right_center();
+                    let center = rect.rect.center();
                     let radius = 5.0;
                     // hash the type id to get a color
                     let color = hash_type_id(needed_type);
@@ -207,6 +207,23 @@ fn show_node(
             });
             container.show(ui, |ui| {
                 ui.label(node.name()).on_hover_text(node.description());
+            });
+            ui.vertical(|ui| {
+                for needed_type in node.needed_types_output() {
+                    if node.name() == "Output" {
+                        continue;
+                    }
+
+                    let (rect, painter) =
+                        ui.allocate_painter(Vec2::new(10.0, 10.0), Sense::hover());
+
+                    let center = rect.rect.center();
+                    let radius = 5.0;
+                    // hash the type id to get a color
+                    let color = hash_type_id(needed_type);
+
+                    painter.circle_filled(center, radius, color);
+                }
             });
         });
     });

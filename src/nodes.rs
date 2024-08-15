@@ -9,6 +9,14 @@ impl Node<(Model,), (Model,)> for OutputNode {
     fn operation(&self, model: (Model,)) -> (Model,) {
         model
     }
+
+    fn name() -> String {
+        "Output".to_string()
+    }
+
+    fn description() -> String {
+        "Outputs the model to be displayed".to_string()
+    }
 }
 
 pub struct TransformNode {}
@@ -22,6 +30,14 @@ impl Node<(Model, Vector3<f32>), (Model,)> for TransformNode {
         model.set_transform(transform);
 
         (model,)
+    }
+
+    fn name() -> String {
+        "Transform".to_string()
+    }
+
+    fn description() -> String {
+        "Transforms the model".to_string()
     }
 }
 
@@ -41,6 +57,14 @@ where
 {
     fn operation(&self, _: ((),)) -> (T,) {
         (self.value.clone(),)
+    }
+
+    fn name() -> String {
+        "Value".to_string()
+    }
+
+    fn description() -> String {
+        "Outputs a value".to_string()
     }
 }
 
@@ -101,6 +125,14 @@ impl Node<(Model, Model), (Vec<Model>,)> for InstatiateOnPointsNode {
 
         (models,)
     }
+
+    fn name() -> String {
+        "Instatiate on points".to_string()
+    }
+
+    fn description() -> String {
+        "Instatiates the model on the points of the other model".to_string()
+    }
 }
 
 pub struct ScaleInstanceNode {}
@@ -118,6 +150,14 @@ impl Node<(Vec<Model>, f32), (Vec<Model>,)> for ScaleInstanceNode {
 
         (new_models,)
     }
+
+    fn name() -> String {
+        "Scale instance".to_string()
+    }
+
+    fn description() -> String {
+        "Scales the instances".to_string()
+    }
 }
 
 pub struct MergeNode {}
@@ -131,6 +171,14 @@ impl Node<(Vec<crate::Model>,), (crate::Model,)> for MergeNode {
         }
 
         (model,)
+    }
+
+    fn name() -> String {
+        "Merge".to_string()
+    }
+
+    fn description() -> String {
+        "Merges the models".to_string()
     }
 }
 
