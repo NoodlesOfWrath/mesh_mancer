@@ -10,8 +10,8 @@ use three_d::*;
 
 use crate::{NodeAny, NodeGraph};
 
-use std::hash::Hash;
 use std::hash::Hasher;
+use std::{any::Any, hash::Hash};
 
 struct ColorScheme {
     background: Color32,
@@ -22,12 +22,29 @@ struct ColorScheme {
 // a node graph but with extra information for rendering
 struct VisualNodeGraph {
     node_graph: NodeGraph,
+    node_inputs: Vec<Vec<Rect>>,
+    node_outputs: Vec<Vec<Rect>>,
     positions: Vec<Pos2>,
     sizes: Vec<eframe::egui::Vec2>,
     scheme: ColorScheme,
 }
 
 impl VisualNodeGraph {
+    fn new(node_graph: NodeGraph, scheme: ColorScheme) -> Self {
+        let mut new = VisualNodeGraph {
+            node_graph,
+            node_inputs: Vec::new(),
+            node_outputs: Vec::new(),
+            positions: Vec::new(),
+            sizes: Vec::new(),
+            scheme,
+        };
+
+        new.init();
+
+        new
+    }
+
     fn setup_positions(&mut self) {
         const DEFAULT_POSITION: Pos2 = pos2(200.0, 200.0);
         const DEFAULT_SIZE: Vec2 = vec2(100.0, 100.0);
@@ -99,6 +116,14 @@ impl VisualNodeGraph {
             }
         }
     }
+
+    fn get_input_rect(&self, node_index: usize, input_index: usize) -> Rect {
+        self.node_inputs[node_index][input_index]
+    }
+
+    fn get_output_rect(&self, node_index: usize, output_index: usize) -> Rect {
+        self.node_outputs[node_index][output_index]
+    }
 }
 
 struct NodeGraphRenderer {
@@ -152,6 +177,21 @@ impl App for NodeGraphRenderer {
 
                     self.visual_node_graph.set_node_position(i, response.pos);
                     self.visual_node_graph.set_node_size(i, response.size);
+                    if i >= self.visual_node_graph.node_inputs.len() {
+                        self.visual_node_graph
+                            .node_inputs
+                            .push(response.input_rects.clone());
+                        self.visual_node_graph
+                            .node_outputs
+                            .push(response.output_rects.clone());
+                    } else {
+                        self.visual_node_graph.node_inputs[i] = response.input_rects.clone();
+                        self.visual_node_graph.node_outputs[i] = response.output_rects.clone();
+                    }
+                }
+
+                for connection in self.visual_node_graph.node_graph.get_connections() {
+                    render_connection(&self.visual_node_graph, &connection, ui);
                 }
 
                 //ui.image(ImageSource::Uri("color".into()));
@@ -162,9 +202,36 @@ impl App for NodeGraphRenderer {
     }
 }
 
+fn render_connection(
+    visual_node_graph: &VisualNodeGraph,
+    connection: &crate::Connection,
+    ui: &mut eframe::egui::Ui,
+) {
+    let start =
+        visual_node_graph.get_output_rect(connection.from().node(), connection.from().socket());
+
+    let end = visual_node_graph.get_input_rect(connection.to().node(), connection.to().socket());
+
+    let mut start = start.center();
+    let mut end = end.center();
+
+    let painter = ui.painter();
+    let node = visual_node_graph
+        .node_graph
+        .get_node(connection.from().node());
+
+    let type_id = node.needed_types_output()[connection.from().socket()];
+
+    let color = hash_type_id(type_id);
+
+    painter.line_segment([start, end], (1.0, color));
+}
+
 struct NodeResponse {
     pos: Pos2,
     size: Vec2,
+    input_rects: Vec<Rect>,
+    output_rects: Vec<Rect>,
 }
 
 fn show_node(
@@ -188,11 +255,13 @@ fn show_node(
     let area = Area::new(Id::new(node.name()))
         .current_pos(pos)
         .movable(true);
+    let mut input_rects = Vec::new();
+    let mut output_rects = Vec::new();
 
     let response = area.show(ctx, |ui| {
         // display a number of spheres equal to the number of inputs on the left of the node
-        ui.horizontal(|ui| {
-            ui.vertical(|ui| {
+        ui.horizontal_centered(|ui| {
+            let input_response = ui.vertical_centered(|ui| {
                 for needed_type in node.needed_types_input() {
                     let (rect, painter) =
                         ui.allocate_painter(Vec2::new(10.0, 10.0), Sense::hover());
@@ -205,10 +274,20 @@ fn show_node(
                     painter.circle_filled(center, radius, color);
                 }
             });
+            let all_rect = input_response.response.rect;
+            // split the rect into the individual input rects
+            for i in 0..node.needed_types_input().len() {
+                let rect = Rect::from_min_max(
+                    all_rect.min + vec2(0.0, i as f32 * 10.0),
+                    all_rect.min + vec2(10.0, (i + 1) as f32 * 10.0),
+                );
+                input_rects.push(rect);
+            }
+
             container.show(ui, |ui| {
                 ui.label(node.name()).on_hover_text(node.description());
             });
-            ui.vertical(|ui| {
+            let output_response = ui.vertical_centered(|ui| {
                 for needed_type in node.needed_types_output() {
                     if node.name() == "Output" {
                         continue;
@@ -225,6 +304,16 @@ fn show_node(
                     painter.circle_filled(center, radius, color);
                 }
             });
+
+            let all_rect = output_response.response.rect;
+            // split the rect into the individual output rects
+            for i in 0..node.needed_types_output().len() {
+                let rect = Rect::from_min_max(
+                    all_rect.min + vec2(0.0, i as f32 * 10.0),
+                    all_rect.min + vec2(10.0, (i + 1) as f32 * 10.0),
+                );
+                output_rects.push(rect);
+            }
         });
     });
 
@@ -233,12 +322,16 @@ fn show_node(
         return NodeResponse {
             pos: new_pos,
             size: response.response.rect.size(),
+            input_rects,
+            output_rects,
         };
     }
 
     NodeResponse {
         pos,
         size: response.response.rect.size(),
+        input_rects,
+        output_rects,
     }
 }
 
@@ -256,19 +349,14 @@ pub fn run() {
         node_background: Color32::from_gray(0),
         node_text: Color32::from_gray(255),
     };
-    let mut visual_node_graph = VisualNodeGraph {
-        node_graph,
-        positions: Vec::new(),
-        sizes: Vec::new(),
-        scheme: midnight_scheme,
-    };
-    visual_node_graph.init();
+    let mut visual_node_graph = VisualNodeGraph::new(node_graph, midnight_scheme);
 
     let app = NodeGraphRenderer {
         visual_node_graph: visual_node_graph,
         was_dragging: false,
         //three_d_info: setup_three_d(),
     };
+
     let mut win_options = NativeOptions::default();
     win_options.hardware_acceleration = HardwareAcceleration::Preferred;
 

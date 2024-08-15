@@ -14,8 +14,17 @@ impl NodeSocket {
     pub fn new(node: usize, socket: usize) -> Self {
         Self { node, socket }
     }
+
+    pub fn node(&self) -> usize {
+        self.node
+    }
+
+    pub fn socket(&self) -> usize {
+        self.socket
+    }
 }
 
+#[derive(Clone)]
 pub struct Connection {
     from: NodeSocket,
     to: NodeSocket,
@@ -24,6 +33,14 @@ pub struct Connection {
 impl Connection {
     pub fn new(from: NodeSocket, to: NodeSocket) -> Self {
         Self { from, to }
+    }
+
+    pub fn from(&self) -> NodeSocket {
+        self.from.clone()
+    }
+
+    pub fn to(&self) -> NodeSocket {
+        self.to.clone()
     }
 }
 
@@ -142,6 +159,15 @@ impl NodeGraph {
 
     pub fn get_node(&self, index: usize) -> &dyn NodeAny {
         self.nodes_elements[index].node.as_ref()
+    }
+
+    pub fn get_connections(&self) -> Vec<Connection> {
+        let mut connections = Vec::new();
+        for node in self.nodes_elements.iter() {
+            connections.extend(node.inputs.iter().cloned());
+            connections.extend(node.outputs.iter().cloned());
+        }
+        connections
     }
 }
 
