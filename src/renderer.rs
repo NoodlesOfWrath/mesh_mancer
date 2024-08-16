@@ -124,6 +124,8 @@ impl VisualNodeGraph {
     fn get_output_rect(&self, node_index: usize, output_index: usize) -> Rect {
         self.node_outputs[node_index][output_index]
     }
+
+    fn show() {}
 }
 
 struct NodeGraphRenderer {
@@ -255,13 +257,14 @@ fn show_node(
     let area = Area::new(Id::new(node.name()))
         .current_pos(pos)
         .movable(true);
+
     let mut input_rects = Vec::new();
     let mut output_rects = Vec::new();
 
     let response = area.show(ctx, |ui| {
         // display a number of spheres equal to the number of inputs on the left of the node
-        ui.horizontal_centered(|ui| {
-            let input_response = ui.vertical_centered(|ui| {
+        ui.horizontal(|ui| {
+            let input_response = ui.vertical(|ui| {
                 for needed_type in node.needed_types_input() {
                     let (rect, painter) =
                         ui.allocate_painter(Vec2::new(10.0, 10.0), Sense::hover());
@@ -287,7 +290,7 @@ fn show_node(
             container.show(ui, |ui| {
                 ui.label(node.name()).on_hover_text(node.description());
             });
-            let output_response = ui.vertical_centered(|ui| {
+            let output_response = ui.vertical(|ui| {
                 for needed_type in node.needed_types_output() {
                     if node.name() == "Output" {
                         continue;
@@ -349,7 +352,7 @@ pub fn run() {
         node_background: Color32::from_gray(0),
         node_text: Color32::from_gray(255),
     };
-    let mut visual_node_graph = VisualNodeGraph::new(node_graph, midnight_scheme);
+    let visual_node_graph = VisualNodeGraph::new(node_graph, midnight_scheme);
 
     let app = NodeGraphRenderer {
         visual_node_graph: visual_node_graph,
@@ -360,11 +363,12 @@ pub fn run() {
     let mut win_options = NativeOptions::default();
     win_options.hardware_acceleration = HardwareAcceleration::Preferred;
 
-    let result = run_native(
+    run_native(
         "Node Graph",
         win_options,
         Box::new(|context| Ok(Box::new(app))),
-    );
+    )
+    .unwrap();
 }
 
 struct ThreeDInfo {

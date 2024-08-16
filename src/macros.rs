@@ -23,6 +23,7 @@ macro_rules! tuple_to_vec {
 // make sure T1, T2, T3, T4 are Clone and 'static
 macro_rules! impl_input {
     ($($t:ident),*) => {
+        #[allow(non_snake_case)]
         impl<$($t: Clone + 'static),*> InputOrOutput for ($($t,)*) {
             type T = ($($t,)*);
             fn convert(items: Vec<&dyn Any>) -> Self::T {
